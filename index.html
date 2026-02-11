@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --clay:        #cc785c;
+            --clay-light:  #e8a98a;
+            --clay-dark:   #a85a3e;
+            --cream:       #f5f0e8;
+            --cream-dark:  #ede5d8;
+            --parchment:   #d9cfc0;
+            --charcoal:    #2c2825;
+            --charcoal-mid:#4a4440;
+            --muted:       #8a7f78;
+            --white:       #fdfaf7;
+            --green:       #5a8a6a;
+            --green-light: #d4ead8;
+            --red:         #a85050;
+            --red-light:   #f0d8d8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Sora', sans-serif;
+            background: var(--cream);
+            min-height: 100vh;
+            color: var(--charcoal);
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                radial-gradient(ellipse at 18% 18%, rgba(204,120,92,.13) 0%, transparent 50%),
+                radial-gradient(ellipse at 82% 82%, rgba(204,120,92,.09) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .app-wrapper {
+            position: relative;
+            z-index: 1;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 36px 20px 60px;
+        }
+
+        /* HEADER */
+        .header {
+            margin-bottom: 36px;
+            display: flex;
+            align-items: flex-end;
+            gap: 16px;
+        }
+
+        .header-icon {
+            width: 54px;
+            height: 54px;
+            background: var(--clay);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 27px;
+            flex-shrink: 0;
+            box-shadow: 0 4px 18px rgba(204,120,92,.38);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            font-weight: 700;
+            color: var(--charcoal);
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            color: var(--muted);
+            font-size: 0.88em;
+            margin-top: 2px;
+        }
+
+        /* TABS */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--cream-dark);
+            border: 1.5px solid var(--parchment);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 28px;
+            width: fit-content;
+        }
+
+        .tab {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 9px;
+            font-family: 'Sora', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--muted);
+            background: transparent;
+            cursor: pointer;
+            transition: all .2s ease;
+        }
+
+        .tab:hover { color: var(--charcoal); }
+
+        .tab.active {
+            background: var(--white);
+            color: var(--clay);
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(44,40,37,.1);
+        }
+
+        /* CARD */
+        .card {
+            background: var(--white);
+            border-radius: 16px;
+            border: 1.5px solid var(--parchment);
+            padding: 28px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 14px rgba(44,40,37,.06);
+        }
+
+        .card-title {
+            font-size: 1em;
+            font-weight: 600;
+            color: var(--charcoal);
+            margin-bottom: 22px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title::before {
+            content: '';
+            display: block;
+            width: 3px;
+            height: 18px;
+            background: var(--clay);
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        /* FORM */
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+        }
+
+        input, select, textarea {
+            font-family: 'Sora', sans-serif;
+            font-size: 14px;
+            padding: 10px 14px;
+            border: 1.5px solid var(--parchment);
+            border-radius: 8px;
+            background: var(--cream);
+            color: var(--charcoal);
+            transition: border-color .2s, background .2s;
+            -webkit-appearance: none;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--clay);
+            background: var(--white);
+        }
+
+        input::placeholder { color: var(--parchment); }
+        textarea { resize: vertical; min-height: 60px; }
+
+        /* BUTTONS */
+        .btn {
+            font-family: 'Sora', sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            padding: 11px 22px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all .2s ease;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: var(--clay);
+            color: var(--white);
+            box-shadow: 0 3px 12px rgba(204,120,92,.32);
+        }
+
+        .btn-primary:hover {
+            background: var(--clay-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 5px 18px rgba(204,120,92,.42);
+        }
+
+        .btn-ghost {
+            background: var(--cream-dark);
+            color: var(--charcoal-mid);
+            border: 1.5px solid var(--parchment);
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+
+        .btn-ghost:hover { background: var(--parchment); }
+
+        .btn-remove {
+            background: var(--red-light);
+            color: var(--red);
+            padding: 6px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-family: 'Sora', sans-serif;
+            transition: background .2s;
+        }
+
+        .btn-remove:hover { background: #e8c0c0; }
+
+        /* SPLIT SECTION */
+        .split-section {
+            background: var(--cream);
+            border: 1.5px solid var(--parchment);
+            border-radius: 10px;
+            padding: 16px;
+            margin: 14px 0;
+        }
+
+        .split-section > label {
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        .person-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .person-row input { flex: 1; }
+
+        /* TABLE */
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1.5px solid var(--parchment);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        thead tr { background: var(--cream-dark); }
+
+        th {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--muted);
+            padding: 13px 16px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 12px 16px;
+            border-top: 1px solid var(--cream-dark);
+            color: var(--charcoal);
+            vertical-align: middle;
+        }
+
+        tbody tr:hover { background: var(--cream); }
+
+        .amount-cell {
+            font-family: 'DM Mono', monospace;
+            font-weight: 500;
+            color: var(--clay-dark);
+        }
+
+        /* BADGES */
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--cream-dark);
+            color: var(--charcoal-mid);
+            white-space: nowrap;
+        }
+
+        .badge-split { background: var(--green-light); color: var(--green); }
+        .badge-owe   { background: var(--red-light);   color: var(--red); }
+        .badge-even  { background: var(--cream-dark);  color: var(--muted); }
+
+        /* STAT CARDS */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--white);
+            border: 1.5px solid var(--parchment);
+            border-radius: 14px;
+            padding: 22px;
+            box-shadow: 0 2px 10px rgba(44,40,37,.06);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            border-radius: 14px 14px 0 0;
+            background: var(--clay);
+        }
+
+        .stat-card:nth-child(2)::after { background: var(--clay-light); }
+        .stat-card:nth-child(3)::after { background: var(--clay-dark); }
+
+        .stat-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-family: 'DM Mono', monospace;
+            font-size: 2em;
+            font-weight: 500;
+            color: var(--charcoal);
+        }
+
+        /* EMPTY */
+        .empty {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--muted);
+        }
+
+        .empty-icon { font-size: 2.4em; margin-bottom: 12px; }
+
+        .empty h3 {
+            font-size: 1.05em;
+            font-weight: 600;
+            color: var(--charcoal-mid);
+            margin-bottom: 6px;
+        }
+
+        .empty p { font-size: 13px; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        @media (max-width: 640px) {
+            .tabs { width: 100%; }
+            .tab { flex: 1; text-align: center; padding: 10px 6px; font-size: 12px; }
+            .header h1 { font-size: 1.5em; }
+            .stat-value { font-size: 1.6em; }
+        }
+    </style>
+</head>
+<body>
+<div class="app-wrapper">
+
+<div>
+    <h1>Expense Tracker</h1>
+    <p>Track personal expenses &amp; split bills with friends</p>
+    <div style="margin-top:12px;">
+        <button class="btn btn-ghost" type="button" onclick="downloadCSV()">⬇ Export CSV (Excel)</button>
+    </div>
+</div>
+
+
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('personal', this)">Personal</button>
+        <button class="tab" onclick="switchTab('split', this)">Split Bills</button>
+        <button class="tab" onclick="switchTab('summary', this)">Summary</button>
+    </div>
+
+    <!-- PERSONAL -->
+    <div id="personal" class="tab-content active">
+        <div class="card">
+            <div class="card-title">Add Personal Expense</div>
+            <form id="personalForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="p-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="p-category" required>
+                            <option value="">Select…</option>
+                            <option>🍔 Food</option>
+                            <option>🚗 Transport</option>
+                            <option>🛍️ Shopping</option>
+                            <option>🎬 Entertainment</option>
+                            <option>📄 Bills</option>
+                            <option>⚕️ Healthcare</option>
+                            <option>📌 Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount ($)</label>
+                        <input type="number" id="p-amount" step="0.01" min="0" placeholder="0.00" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="p-desc" placeholder="What did you spend on?" required>
+                </div>
+                <div style="margin-top:18px;">
+                    <button type="submit" class="btn btn-primary">Add Expense</button>
+                </div>
+            </form>
+        </div>
+        <div id="personalList"></div>
+    </div>
+
+    <!-- SPLIT -->
+    <div id="split" class="tab-content">
+        <div class="card">
+            <div class="card-title">Add Split Expense</div>
+            <form id="splitForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="s-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="s-category" required>
+                            <option value="">Select…</option>
+                            <option>🍔 Food</option>
+                            <option>🚗 Transport</option>
+                            <option>🛍️ Shopping</option>
+                            <option>🎬 Entertainment</option>
+                            <option>📄 Bills</option>
+                            <option>✈️ Travel</option>
+                            <option>📌 Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Total Amount ($)</label>
+                        <input type="number" id="s-amount" step="0.01" min="0" placeholder="0.00" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="s-desc" placeholder="What was this for?" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Paid By</label>
+                        <input type="text" id="s-paidby" placeholder="Who paid?" required>
+                    </div>
+                </div>
+                <div class="split-section">
+                    <label>Split Between</label>
+                    <div id="splitPeople">
+                        <div class="person-row">
+                            <input type="text" placeholder="Person name" class="p-name" required>
+                            <input type="number" placeholder="Amount" step="0.01" class="p-amt" required>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-ghost" onclick="addPerson()">+ Add Person</button>
+                </div>
+                <div style="margin-top:6px;">
+                    <button type="submit" class="btn btn-primary">Add Split Expense</button>
+                </div>
+            </form>
+        </div>
+        <div id="splitList"></div>
+    </div>
+
+    <!-- SUMMARY -->
+    <div id="summary" class="tab-content">
+        <div class="summary-grid">
+            <div class="stat-card">
+                <div class="stat-label">Personal Total</div>
+                <div class="stat-value" id="s-personal">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Split Total</div>
+                <div class="stat-value" id="s-split">$0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Grand Total</div>
+                <div class="stat-value" id="s-grand">$0.00</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">Category Breakdown</div>
+            <div id="catBreakdown"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">Balance Summary</div>
+            <div id="balanceSummary"></div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let personalExpenses = [];
+    let splitExpenses    = [];
+
+    document.getElementById('p-date').valueAsDate = new Date();
+    document.getElementById('s-date').valueAsDate = new Date();
+
+    function switchTab(id, btn) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(id).classList.add('active');
+        if (id === 'summary') renderSummary();
+    }
+
+    async function api(url, options = {}) {
+        const res = await fetch(url, {
+            headers: { "Content-Type": "application/json" },
+            ...options
+        });
+
+        if (!res.ok) {
+            let msg = "Request failed";
+            try {
+                const data = await res.json();
+                if (data && data.error) msg = data.error;
+            } catch {}
+            throw new Error(msg);
+        }
+
+        return res.json().catch(() => ({}));
+    }
+
+    async function loadAll() {
+        personalExpenses = await api("/api/personal", { method: "GET" });
+        splitExpenses    = await api("/api/split", { method: "GET" });
+        renderPersonal();
+        renderSplit();
+    }
+
+    document.getElementById('personalForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        try {
+            await api("/api/personal", {
+                method: "POST",
+                body: JSON.stringify({
+                    date: document.getElementById('p-date').value,
+                    category: document.getElementById('p-category').value,
+                    amount: parseFloat(document.getElementById('p-amount').value),
+                    desc: document.getElementById('p-desc').value
+                })
+            });
+
+            await loadAll();
+            this.reset();
+            document.getElementById('p-date').valueAsDate = new Date();
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+
+    document.getElementById('splitForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const people = [];
+        document.querySelectorAll('#splitPeople .person-row').forEach(row => {
+            const n = row.querySelector('.p-name').value.trim();
+            const a = parseFloat(row.querySelector('.p-amt').value);
+            if (n && !isNaN(a)) people.push({ name: n, amount: a });
+        });
+
+        try {
+            await api("/api/split", {
+                method: "POST",
+                body: JSON.stringify({
+                    date: document.getElementById('s-date').value,
+                    category: document.getElementById('s-category').value,
+                    amount: parseFloat(document.getElementById('s-amount').value),
+                    desc: document.getElementById('s-desc').value,
+                    paidBy: document.getElementById('s-paidby').value,
+                    people
+                })
+            });
+
+            await loadAll();
+            this.reset();
+            document.getElementById('s-date').valueAsDate = new Date();
+            document.getElementById('splitPeople').innerHTML = `
+                <div class="person-row">
+                    <input type="text" placeholder="Person name" class="p-name" required>
+                    <input type="number" placeholder="Amount" step="0.01" class="p-amt" required>
+                </div>`;
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+
+    function addPerson() {
+        const row = document.createElement('div');
+        row.className = 'person-row';
+        row.innerHTML = `
+            <input type="text" placeholder="Person name" class="p-name" required>
+            <input type="number" placeholder="Amount" step="0.01" class="p-amt" required>
+            <button type="button" class="btn-remove" onclick="this.parentElement.remove()">✕</button>`;
+        document.getElementById('splitPeople').appendChild(row);
+    }
+
+    function renderPersonal() {
+        const el = document.getElementById('personalList');
+
+        if (!personalExpenses.length) {
+            el.innerHTML = `<div class="empty"><div class="empty-icon">🧾</div><h3>No expenses yet</h3><p>Add your first expense above to get started.</p></div>`;
+            return;
+        }
+
+        const sorted = [...personalExpenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+        el.innerHTML = `<div class="table-wrap"><table>
+            <thead><tr>
+                <th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th></th>
+            </tr></thead>
+            <tbody>
+                ${sorted.map(e => `<tr>
+                    <td style="color:var(--muted);font-size:13px;">${fmt(e.date)}</td>
+                    <td><span class="badge">${e.category}</span></td>
+                    <td>${e.desc}</td>
+                    <td class="amount-cell">$${Number(e.amount).toFixed(2)}</td>
+                    <td><button class="btn-remove" onclick="delP(${e.id})">✕</button></td>
+                </tr>`).join('')}
+            </tbody>
+        </table></div>`;
+    }
+
+    function renderSplit() {
+        const el = document.getElementById('splitList');
+
+        if (!splitExpenses.length) {
+            el.innerHTML = `<div class="empty"><div class="empty-icon">🤝</div><h3>No split expenses yet</h3><p>Add an expense to split with others!</p></div>`;
+            return;
+        }
+
+        const sorted = [...splitExpenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+        el.innerHTML = `<div class="table-wrap"><table>
+            <thead><tr>
+                <th>Date</th><th>Category</th><th>Description</th><th>Paid By</th><th>Split</th><th>Total</th><th></th>
+            </tr></thead>
+            <tbody>
+                ${sorted.map(e => `<tr>
+                    <td style="color:var(--muted);font-size:13px;">${fmt(e.date)}</td>
+                    <td><span class="badge">${e.category}</span></td>
+                    <td>${e.desc}</td>
+                    <td style="font-weight:500;">${e.paidBy}</td>
+                    <td>${(e.people || []).map(p => `<span class="badge badge-split" style="margin:2px 3px 2px 0;">${p.name} $${Number(p.amount).toFixed(2)}</span>`).join('')}</td>
+                    <td class="amount-cell">$${Number(e.amount).toFixed(2)}</td>
+                    <td><button class="btn-remove" onclick="delS(${e.id})">✕</button></td>
+                </tr>`).join('')}
+            </tbody>
+        </table></div>`;
+    }
+
+    function renderSummary() {
+        const totP = personalExpenses.reduce((s, e) => s + Number(e.amount), 0);
+        const totS = splitExpenses.reduce((s, e) => s + Number(e.amount), 0);
+        const total = totP + totS;
+
+        document.getElementById('s-personal').textContent = `$${totP.toFixed(2)}`;
+        document.getElementById('s-split').textContent    = `$${totS.toFixed(2)}`;
+        document.getElementById('s-grand').textContent    = `$${total.toFixed(2)}`;
+
+        // Category breakdown
+        const cats = {};
+        [...personalExpenses, ...splitExpenses].forEach(e => {
+            cats[e.category] = (cats[e.category] || 0) + Number(e.amount);
+        });
+
+        const catEl = document.getElementById('catBreakdown');
+        if (!Object.keys(cats).length) {
+            catEl.innerHTML = `<div class="empty"><p>No data yet</p></div>`;
+        } else {
+            catEl.innerHTML = `<div class="table-wrap"><table>
+                <thead><tr><th>Category</th><th>Amount</th><th>Share</th><th>Bar</th></tr></thead>
+                <tbody>${Object.entries(cats).sort((a,b)=>b[1]-a[1]).map(([cat, amt]) => {
+                    const pct = total ? ((amt/total)*100).toFixed(1) : 0;
+                    return `<tr>
+                        <td><span class="badge">${cat}</span></td>
+                        <td class="amount-cell">$${amt.toFixed(2)}</td>
+                        <td style="color:var(--muted);font-size:13px;">${pct}%</td>
+                        <td style="min-width:120px;">
+                            <div style="background:var(--cream-dark);border-radius:4px;height:8px;overflow:hidden;">
+                                <div style="width:${pct}%;height:100%;background:var(--clay);border-radius:4px;transition:width .4s;"></div>
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('')}</tbody>
+            </table></div>`;
+        }
+
+        // Balance summary
+        const bal = {};
+        splitExpenses.forEach(e => {
+            bal[e.paidBy] = (bal[e.paidBy] || 0) + Number(e.amount);
+            (e.people || []).forEach(p => {
+                bal[p.name] = (bal[p.name] || 0) - Number(p.amount);
+            });
+        });
+
+        const balEl = document.getElementById('balanceSummary');
+        if (!Object.keys(bal).length) {
+            balEl.innerHTML = `<div class="empty"><p>Add split expenses to see who owes what.</p></div>`;
+        } else {
+            balEl.innerHTML = `<div class="table-wrap"><table>
+                <thead><tr><th>Person</th><th>Net Balance</th><th>Status</th></tr></thead>
+                <tbody>${Object.entries(bal).sort((a,b)=>b[1]-a[1]).map(([name, b]) => `
+                    <tr>
+                        <td style="font-weight:500;">${name}</td>
+                        <td class="amount-cell">$${Math.abs(b).toFixed(2)}</td>
+                        <td>${b > 0.005
+                            ? `<span class="badge badge-split">Gets back $${b.toFixed(2)}</span>`
+                            : b < -0.005
+                            ? `<span class="badge badge-owe">Owes $${Math.abs(b).toFixed(2)}</span>`
+                            : `<span class="badge badge-even">Settled ✓</span>`}
+                        </td>
+                    </tr>`).join('')}
+                </tbody>
+            </table></div>`;
+        }
+    }
+
+    async function delP(id) {
+        await api(`/api/personal/${id}`, { method: "DELETE" });
+        await loadAll();
+    }
+
+    async function delS(id) {
+        await api(`/api/split/${id}`, { method: "DELETE" });
+        await loadAll();
+    }
+
+    function fmt(d) {
+        return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric'
+        });
+    }
+async function downloadCSV() {
+    try {
+        const res = await fetch("/api/export.csv");
+        if (!res.ok) throw new Error("Export failed");
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "expenses_export.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+    // Initial load from database
+    loadAll().catch(err => alert(err.message));
+</script>
+</body>
+</html>
