@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign in • Expense Tracker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#0f1115;
+      --card:#151923;
+      --card2:#10131a;
+      --text:#f2f4f8;
+      --muted:#aab2c0;
+      --border:#2a3140;
+      --accent:#ffffff;
+      --accent2:#c9ced8;
+      --danger:#ff5c5c;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:'Sora',sans-serif;
+      background: radial-gradient(900px 500px at 20% 10%, rgba(255,255,255,.06), transparent 60%),
+                  radial-gradient(900px 500px at 80% 90%, rgba(255,255,255,.04), transparent 60%),
+                  var(--bg);
+      min-height:100vh; display:flex; align-items:center; justify-content:center;
+      color:var(--text); padding:24px;
+    }
+    .wrap{width:100%; max-width:420px;}
+    .brand{
+      display:flex; gap:12px; align-items:center; margin-bottom:18px;
+    }
+    .logo{
+      width:44px;height:44px;border-radius:12px;background:var(--accent);
+      color:#0f1115; display:flex; align-items:center; justify-content:center;
+      font-size:22px; font-weight:800; box-shadow: var(--shadow);
+    }
+    h1{font-size:22px; letter-spacing:-.3px}
+    p{color:var(--muted); font-size:13px; margin-top:2px}
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border:1px solid var(--border); border-radius:16px; padding:18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+    }
+    label{display:block; font-size:11px; color:var(--muted); font-weight:700; letter-spacing:.8px; text-transform:uppercase; margin:12px 0 6px;}
+    input{
+      width:100%; padding:11px 12px; border-radius:10px;
+      border:1px solid var(--border); background: rgba(0,0,0,.25);
+      color:var(--text); outline:none;
+    }
+    input:focus{border-color: rgba(255,255,255,.35)}
+    .row{display:flex; gap:10px; margin-top:14px;}
+    button{
+      flex:1;
+      border:none; border-radius:10px; padding:11px 12px;
+      font-weight:700; cursor:pointer;
+      background: var(--accent);
+      color:#0f1115;
+    }
+    button.secondary{
+      background: transparent; color: var(--accent);
+      border:1px solid rgba(255,255,255,.25);
+    }
+    .msg{margin-top:12px; font-size:13px; color: var(--muted);}
+    .msg.error{color: var(--danger);}
+    .tiny{margin-top:14px; font-size:12px; color:var(--muted); line-height:1.4}
+    a{color:var(--accent2)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo">₿</div>
+      <div>
+        <h1>Expense Tracker</h1>
+        <p>Sign in to sync your expenses anywhere</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>Username</label>
+      <input id="username" placeholder="e.g., aryan" autocomplete="username" />
+
+      <label>Password</label>
+      <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+
+      <div class="row">
+        <button onclick="login()">Sign in</button>
+        <button class="secondary" onclick="registerUser()">Register</button>
+      </div>
+
+      <div id="msg" class="msg"></div>
+
+      <div class="tiny">
+        Tip: Register once, then use the same login on any device. <br/>
+        Your data is stored per-user.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function api(url, body) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(body)
+      });
+      const data = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      return data;
+    }
+
+    function setMsg(text, isErr=false){
+      const el = document.getElementById("msg");
+      el.textContent = text;
+      el.className = "msg" + (isErr ? " error" : "");
+    }
+
+    async function login(){
+      try{
+        setMsg("");
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+        await api("/api/auth/login", {username, password});
+        window.location.href = "/app";
+      } catch(e){
+        setMsg(e.message, true);
+      }
+    }
+
+    async function registerUser(){
+      try{
+        setMsg("");
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+        await api("/api/auth/register", {username, password});
+        setMsg("Registered! Now signing you in…");
+        await api("/api/auth/login", {username, password});
+        window.location.href = "/app";
+      } catch(e){
+        setMsg(e.message, true);
+      }
+    }
+
+    // Enter key submits login
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Enter") login();
+    });
+  </script>
+</body>
+</html>
