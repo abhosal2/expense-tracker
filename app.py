@@ -1,7 +1,11 @@
-from flask import Flask, request, jsonify, send_from_directory, Response
+from flask import Flask, request, jsonify, send_from_directory, Response, session, redirect
 import sqlite3
+import os
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")  # set SECRET_KEY on Render for best practice
 DB_NAME = "expenses.db"
 
 
@@ -11,18 +15,36 @@ def get_conn():
     return conn
 
 
+def column_exists(conn, table: str, col: str) -> bool:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(r["name"] == col for r in rows)
+
+
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
+
+    # Users
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
 
     # Personal expenses
     cur.execute("""
         CREATE TABLE IF NOT EXISTS personal_expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
             date TEXT NOT NULL,
             category TEXT NOT NULL,
             amount REAL NOT NULL,
-            description TEXT NOT NULL
+            description TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(user_id) REFERENCES users(id)
         )
     """)
 
@@ -30,11 +52,14 @@ def init_db():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS split_expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
             date TEXT NOT NULL,
             category TEXT NOT NULL,
             amount REAL NOT NULL,
             description TEXT NOT NULL,
-            paid_by TEXT NOT NULL
+            paid_by TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY(user_id) REFERENCES users(id)
         )
     """)
 
@@ -56,39 +81,115 @@ def init_db():
 init_db()
 
 
+def login_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not session.get("user_id"):
+            return jsonify({"error": "Unauthorized"}), 401
+        return fn(*args, **kwargs)
+    return wrapper
+
+
 @app.route("/")
-def home():
-    # Serves your index.html from the same folder as app.py
+def root():
+    # If logged in, go to app. Otherwise show login page.
+    if session.get("user_id"):
+        return redirect("/app")
+    return send_from_directory(".", "login.html")
+
+
+@app.route("/app")
+def app_page():
+    if not session.get("user_id"):
+        return redirect("/")
     return send_from_directory(".", "index.html")
+
+
+# ---------- AUTH API ----------
+
+@app.route("/api/auth/register", methods=["POST"])
+def register():
+    data = request.get_json(force=True)
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+
+    if len(username) < 3:
+        return jsonify({"error": "Username must be at least 3 characters"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+
+    pw_hash = generate_password_hash(password)
+
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, pw_hash))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "Username already exists"}), 400
+
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def login():
+    data = request.get_json(force=True)
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+
+    conn = get_conn()
+    row = conn.execute("SELECT id, password_hash FROM users WHERE username = ?", (username,)).fetchone()
+    conn.close()
+
+    if not row or not check_password_hash(row["password_hash"], password):
+        return jsonify({"error": "Invalid username or password"}), 400
+
+    session["user_id"] = row["id"]
+    session["username"] = username
+    return jsonify({"ok": True})
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/auth/me", methods=["GET"])
+def me():
+    if not session.get("user_id"):
+        return jsonify({"loggedIn": False})
+    return jsonify({"loggedIn": True, "username": session.get("username")})
 
 
 # ---------- PERSONAL API ----------
 
 @app.route("/api/personal", methods=["GET"])
+@login_required
 def list_personal():
+    uid = session["user_id"]
     conn = get_conn()
     rows = conn.execute("""
         SELECT id, date, category, amount, description
         FROM personal_expenses
+        WHERE user_id = ?
         ORDER BY date DESC, id DESC
-    """).fetchall()
+    """, (uid,)).fetchall()
     conn.close()
 
     return jsonify([
-        {
-            "id": r["id"],
-            "date": r["date"],
-            "category": r["category"],
-            "amount": r["amount"],
-            "desc": r["description"],
-        }
+        {"id": r["id"], "date": r["date"], "category": r["category"], "amount": r["amount"], "desc": r["description"]}
         for r in rows
     ])
 
 
 @app.route("/api/personal", methods=["POST"])
+@login_required
 def add_personal():
+    uid = session["user_id"]
     data = request.get_json(force=True)
+
     date = data.get("date")
     category = data.get("category")
     amount = data.get("amount")
@@ -100,20 +201,21 @@ def add_personal():
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO personal_expenses (date, category, amount, description) VALUES (?, ?, ?, ?)",
-        (date, category, float(amount), desc),
+        "INSERT INTO personal_expenses (user_id, date, category, amount, description) VALUES (?, ?, ?, ?, ?)",
+        (uid, date, category, float(amount), desc),
     )
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
-
     return jsonify({"id": new_id})
 
 
 @app.route("/api/personal/<int:pid>", methods=["DELETE"])
+@login_required
 def delete_personal(pid: int):
+    uid = session["user_id"]
     conn = get_conn()
-    conn.execute("DELETE FROM personal_expenses WHERE id = ?", (pid,))
+    conn.execute("DELETE FROM personal_expenses WHERE id = ? AND user_id = ?", (pid, uid))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -122,13 +224,16 @@ def delete_personal(pid: int):
 # ---------- SPLIT API ----------
 
 @app.route("/api/split", methods=["GET"])
+@login_required
 def list_split():
+    uid = session["user_id"]
     conn = get_conn()
     splits = conn.execute("""
         SELECT id, date, category, amount, description, paid_by
         FROM split_expenses
+        WHERE user_id = ?
         ORDER BY date DESC, id DESC
-    """).fetchall()
+    """, (uid,)).fetchall()
 
     result = []
     for s in splits:
@@ -154,7 +259,9 @@ def list_split():
 
 
 @app.route("/api/split", methods=["POST"])
+@login_required
 def add_split():
+    uid = session["user_id"]
     data = request.get_json(force=True)
 
     date = data.get("date")
@@ -174,8 +281,8 @@ def add_split():
     cur = conn.cursor()
 
     cur.execute(
-        "INSERT INTO split_expenses (date, category, amount, description, paid_by) VALUES (?, ?, ?, ?, ?)",
-        (date, category, float(amount), desc, paid_by),
+        "INSERT INTO split_expenses (user_id, date, category, amount, description, paid_by) VALUES (?, ?, ?, ?, ?, ?)",
+        (uid, date, category, float(amount), desc, paid_by),
     )
     split_id = cur.lastrowid
 
@@ -190,50 +297,64 @@ def add_split():
 
     conn.commit()
     conn.close()
-
     return jsonify({"id": split_id})
 
 
 @app.route("/api/split/<int:sid>", methods=["DELETE"])
+@login_required
 def delete_split(sid: int):
-    # Delete children then parent (works even if FK cascade isn't enabled)
+    uid = session["user_id"]
     conn = get_conn()
+
+    # Ensure the split belongs to the user
+    row = conn.execute("SELECT id FROM split_expenses WHERE id = ? AND user_id = ?", (sid, uid)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Not found"}), 404
+
     conn.execute("DELETE FROM split_people WHERE split_id = ?", (sid,))
-    conn.execute("DELETE FROM split_expenses WHERE id = ?", (sid,))
+    conn.execute("DELETE FROM split_expenses WHERE id = ? AND user_id = ?", (sid, uid))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
+
+# ---------- CSV EXPORT (current user's data) ----------
+
 @app.route("/api/export.csv", methods=["GET"])
+@login_required
 def export_csv():
+    uid = session["user_id"]
     conn = get_conn()
     cur = conn.cursor()
 
-    # Personal expenses
     personal = cur.execute("""
         SELECT id, date, category, amount, description
         FROM personal_expenses
+        WHERE user_id = ?
         ORDER BY date DESC, id DESC
-    """).fetchall()
+    """, (uid,)).fetchall()
 
-    # Split expenses + people
     splits = cur.execute("""
         SELECT id, date, category, amount, description, paid_by
         FROM split_expenses
+        WHERE user_id = ?
         ORDER BY date DESC, id DESC
-    """).fetchall()
+    """, (uid,)).fetchall()
 
-    # Build CSV
-    # One simple format: each row is either PERSONAL or SPLIT_PERSON
-    # SPLIT_PERSON rows include split_id and person_name/person_amount
+    def esc(s):
+        s = str(s)
+        s = s.replace('"', '""')
+        return f'"{s}"'
+
     lines = []
     lines.append("type,record_id,date,category,total_amount,description,paid_by,split_id,person_name,person_amount")
 
-    # PERSONAL rows
     for r in personal:
-        # type, record_id, date, category, total_amount, description, paid_by, split_id, person_name, person_amount
-        lines.append(f'PERSONAL,{r["id"]},{r["date"]},"{r["category"]}",{r["amount"]},"{r["description"].replace("\"","\"\"")}",,,,')
+        lines.append(
+            f'PERSONAL,{r["id"]},{r["date"]},{esc(r["category"])},{r["amount"]},{esc(r["description"])},,,,'
+        )
 
-    # SPLIT rows (expand per person)
     for s in splits:
         people = cur.execute("""
             SELECT name, amount
@@ -242,15 +363,14 @@ def export_csv():
             ORDER BY id ASC
         """, (s["id"],)).fetchall()
 
-        # If no people (shouldn’t happen), still export one row
         if not people:
             lines.append(
-                f'SPLIT,{s["id"]},{s["date"]},"{s["category"]}",{s["amount"]},"{s["description"].replace("\"","\"\"")}","{s["paid_by"].replace("\"","\"\"")}",{s["id"]},,'
+                f'SPLIT,{s["id"]},{s["date"]},{esc(s["category"])},{s["amount"]},{esc(s["description"])},{esc(s["paid_by"])},{s["id"]},,'
             )
         else:
             for p in people:
                 lines.append(
-                    f'SPLIT,{s["id"]},{s["date"]},"{s["category"]}",{s["amount"]},"{s["description"].replace("\"","\"\"")}","{s["paid_by"].replace("\"","\"\"")}",{s["id"]},"{p["name"].replace("\"","\"\"")}",{p["amount"]}'
+                    f'SPLIT,{s["id"]},{s["date"]},{esc(s["category"])},{s["amount"]},{esc(s["description"])},{esc(s["paid_by"])},{s["id"]},{esc(p["name"])},{p["amount"]}'
                 )
 
     conn.close()
@@ -263,7 +383,6 @@ def export_csv():
     )
 
 
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
-
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
