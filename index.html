@@ -398,12 +398,18 @@
         </div>
 
         <div class="card">
+            <div class="card-title">Balance Overview</div>
+            <div id="balanceChart"></div>
+            <div class="small-note" id="balanceChartNote"></div>
+        </div>
+
+        <div class="card">
             <div class="card-title">Balance Summary</div>
             <div id="balanceSummary"></div>
         </div>
     </div>
 
-</div>
+</div><!-- ✅ closes .app-wrapper -->
 
 <script>
     let personalExpenses = [];
@@ -462,6 +468,37 @@
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
+    }
+
+    // ✅ Balance Overview chart renderer
+    function renderBalanceChart(totSpent, owe, getBack) {
+        const el = document.getElementById("balanceChart");
+        const note = document.getElementById("balanceChartNote");
+        const max = Math.max(totSpent, owe, getBack, 1);
+
+        const bar = (label, value) => {
+            const pct = Math.round((value / max) * 100);
+            return `
+            <div style="flex:1; min-width:190px; padding:12px 12px; border-radius:14px; border:1px solid rgba(255,255,255,.12); background: rgba(0,0,0,.18);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div style="font-size:11px; color:var(--muted); font-weight:900; text-transform:uppercase; letter-spacing:.8px;">${label}</div>
+                    <div style="font-family:'DM Mono', monospace; font-weight:800;">$${value.toFixed(2)}</div>
+                </div>
+                <div style="height:10px; border-radius:999px; overflow:hidden; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06);">
+                    <div style="height:100%; width:${pct}%; background: rgba(255,255,255,.85); border-radius:999px;"></div>
+                </div>
+            </div>`;
+        };
+
+        el.innerHTML = `
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            ${bar("Spent so far", totSpent)}
+            ${bar("You owe", owe)}
+            ${bar("You get back", getBack)}
+          </div>
+        `;
+
+        note.textContent = "Uses the split-bill net balances (names) + your totals.";
     }
 
     document.getElementById('personalForm').addEventListener('submit', async function(e) {
@@ -601,6 +638,7 @@
         document.getElementById('s-split').textContent    = `$${totS.toFixed(2)}`;
         document.getElementById('s-grand').textContent    = `$${total.toFixed(2)}`;
 
+        // Category breakdown
         const cats = {};
         [...personalExpenses, ...splitExpenses].forEach(e => {
             cats[e.category] = (cats[e.category] || 0) + Number(e.amount);
@@ -628,11 +666,21 @@
             </table></div>`;
         }
 
+        // Balance summary + chart numbers
         const bal = {};
         splitExpenses.forEach(e => {
             bal[e.paidBy] = (bal[e.paidBy] || 0) + Number(e.amount);
             (e.people || []).forEach(p => { bal[p.name] = (bal[p.name] || 0) - Number(p.amount); });
         });
+
+        // Chart: spent / owe / get-back (overall balances)
+        let owe = 0;
+        let getBack = 0;
+        Object.values(bal).forEach(v => {
+            if (v > 0) getBack += v;
+            else owe += Math.abs(v);
+        });
+        renderBalanceChart(total, owe, getBack);
 
         const balEl = document.getElementById('balanceSummary');
         if (!Object.keys(bal).length) {
